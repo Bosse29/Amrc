@@ -1,0 +1,209 @@
+---
+title: "Advanced Methods for Regression and Classification"
+subtitle: "Exercise 1"
+author: "Bosse Behrens , st.id: 12347333"
+output: pdf_document
+---
+# Task 1
+```{r, message=FALSE, results='hide'}
+library("dplyr")
+library("ISLR")
+```
+
+```{r}
+data(College,package="ISLR")
+?College
+str(College)
+summary(College)
+sum(is.na(College))
+```
+There are no missing values in the College data but for the "Texas A&M University at Galveston" the value for PhD (Pct. of faculty with Ph.D.'s) is at 103, which is obviously not a realistic possible percentage. For "Cazenovia College" the Graduation rate is at 118, which is also not possible. Therefore we delete these two observations since we don't know if it's just a typo and both values should be 100, or the data for the whole observation is corrupted. Also for "Private" we have values "yes" and "no" which we have to convert into a numeric varible for regression. We will use a dummy variable with 0 for "no" and 1 for "yes". Furthermore we want to transform very skewed variables such as "Apps". Looking at the summary, we see for the column "Apps" the max value is way more than 20 times the median value. This means there are some very large outliers that can make the distribution of the attribute very right-skewed which could lead to more variance since the large outliers have a great influence. therefore it makes sense to log-transform "Apps".
+```{r}
+College <- College[!rownames(College) 
+          %in% c("Texas A&M University at Galveston", "Cazenovia College"), ]
+College <- College %>%
+  mutate(Private = recode(Private, "Yes" = 1, "No" = 0))
+College_clean <- College %>%
+  mutate(
+    log_Apps = log(Apps))%>%
+  select(-Apps)
+```
+
+
+
+# Task 2
+## a)
+```{r}
+set.seed(12347333)
+n <- nrow(College_clean)
+train <- sample(1:n, round((2/3) * n))
+test<-(1:n)[-train]
+model_lm <- lm(log_Apps ~ . - Enroll - Accept, data = College_clean, 
+               subset = train)
+```
+Summarizing and plotting residuals of fitted model.
+```{r}
+summary(model_lm)
+plot(model_lm)
+```
+The test of significance for the variable sin the models yields that Intercept, Private, F.Undergrad, Outstate, S.F.Ratio, perc.alumni, Expend and Grad.Rate all are very significant with a p-value of $< 0.001$. Additionally PhD is significant on a level of $< 0.01$, Room.Board on $<0.05$ and Top25perc on $<0.1$. The model assumptions are partly fulfilled but not perfectly so. In the residuals vs fitted values plot the residuals seem mostly randomly distributed around zero but have a slight curvature down for the higher fitted values. This could implicate some linear dependence between some of the variables. The qq-plot shows the residuals are not quite normally distributed since the line is curves down for the more negative residuals. The scale-location plot shows again the residuals are mostly homoscedastic but curves slightly upwards for the higher fitted values. This means variance is not perfectly the same for all levels of fitted values. The residuals vs leverage plot shows there are some observation that are clearly identifiable from the rest but still within limits of Cook's distance.
+
+## b)
+
+Getting the design matrix and calculating the estimators.
+```{r}
+train_data <- College_clean[train, ] #model.matrix has no subset functionality
+X <- model.matrix(log_Apps ~ . - Enroll - Accept, data = train_data)
+y <- train_data[ ,"log_Apps"]
+ls_estimators <- solve(t(X)%*%X)%*%t(X)%*%y
+```
+Comparing the results to the lm() model.
+```{r}
+lm_model_estimators <- coef(model_lm)
+df_estimators <- data.frame(
+  ls_estimators = ls_estimators,
+  lm_model_estimators = lm_model_estimators,
+  absolute_difference = abs(ls_estimators - lm_model_estimators))
+print(df_estimators)
+```
+Reading up on the documentation, R is handling binary variables by automatically transforming them into values $0$ and $1$ alphabetically (which we already did). The coefficient can be interpreted as the change of the predicted value if the binary variable is "yes" $(= 1)$ since it will then add $1\cdot\beta_{binary}$ to the predicted value, otherwise $0$.
+\
+Comparing the results we can observe they are not exactly the same but within a very small tolerance ranges between $10^{-13}$ and $10^{-18}$. This is probably due to the inner calculations and machine precision.
+
+## c)
+
+```{r}
+pred_lm_train <- predict(model_lm, newdata = College_clean[train, ])
+pred_lm_test <- predict(model_lm, newdata = College_clean[test, ])
+observed_values_train <- College_clean[train,"log_Apps"]
+observed_values_test <- College_clean[test,"log_Apps"]
+
+plot(observed_values_train, pred_lm_train,
+     main = "full model observed vs predicted (train set)", 
+     xlab = "observed log(Applications)", 
+     ylab = "predicted log(Applications)")
+abline(0, 1, col = "red", lwd = 2)
+
+plot(observed_values_test, pred_lm_test,
+     main = "full model observed vs predicted (test set)", 
+     xlab = "observed log(Applications)", 
+     ylab = "predicted log(Applications)")
+abline(0, 1, col = "red", lwd = 2)
+```
+The prediction performance of the model and its predictions are okay but not perfect. Looking at the plots both for the training and testing data a more fitting curve through the data points plotted (observations vs predictions) would be slightly curves. The points do not seem totally randomly distributed around the $x=y$ line. Especially on the ends of the range of the values the points for very small and large values seem to differ. This implicates that one or more of the model assumptions is not completely fulfilled.
+
+# d)
+
+```{r}
+n_train <- length(observed_values_train)
+n_test <- length(observed_values_test)
+RMSE_train <- sqrt((1/n_train)*sum((observed_values_train - pred_lm_train)^2))
+RMSE_test <- sqrt((1/n_test)*sum((observed_values_test - pred_lm_test)^2))
+print(RMSE_train)
+print(RMSE_test)
+```
+The RSME values are $0.5345712$ for the training set and $0.6148493$ for the testing set. Since the models was fitted on the training data this is to be expected. The log-transformed values for "Apps" ranges in values form around 5 to 9. The RMSEs values seem therefore alright and that the models fits fairly acurate enough even if not perfect.
+
+# Task 3
+## a)
+
+The variables that had p-values of $<0.05$ (except intercept) were Private, F.Undergrad, Outstate, S.F.Ratio, perc.alumni, Expend, and Grad.Rate, PhD and Room.Board. 
+```{r}
+model_lm_red <- lm(log_Apps ~ Private + F.Undergrad + Outstate + S.F.Ratio + 
+                     perc.alumni + Expend + Grad.Rate + PhD + Room.Board, 
+                   data = College_clean, subset = train)
+```
+```{r}
+summary(model_lm_red)
+plot(model_lm_red)
+```
+Now all predictors have a p-value of $< 0.05$ and are thereby statistically significant at the $5\%$-level. In general, this should not be expected. Reasons can be collinearity in the predictors due to which the model might not be able to get the individual effects. Also some predictors might first be marked as significant due to overfitting (training data fits by chance very well) or random variation in the data, but don't have a true effect on the predictions. After reducing the model they might not be calculated as significant anymore. 
+
+## b)
+
+```{r}
+pred_lm_train_red <- predict(model_lm_red, newdata = College_clean[train, ])
+pred_lm_test_red <- predict(model_lm_red, newdata = College_clean[test, ])
+observed_values_train <- College_clean[train,"log_Apps"]
+observed_values_test <- College_clean[test,"log_Apps"]
+
+plot(observed_values_train, pred_lm_train_red,
+     main = "reduced model observed vs predicted (train set)", 
+     xlab = "observed log_Apps", 
+     ylab = "predicted log_Apps")
+abline(0, 1, col = "red", lwd = 2)
+
+plot(observed_values_test, pred_lm_test_red,
+      main = "reduced model observed vs predicted (test set)", 
+     xlab = "observed log(Applications)", 
+     ylab = "predicted log(Applications)")
+abline(0, 1, col = "red", lwd = 2)
+```
+
+## c)
+
+```{r}
+RMSE_train_red <- sqrt((1/n_train)*sum((observed_values_train - 
+                                          pred_lm_train_red)^2))
+RMSE_test_red <- sqrt((1/n_test)*sum((observed_values_test - 
+                                        pred_lm_test_red)^2))
+print(RMSE_train_red)
+print(RMSE_test_red)
+```
+It could have been expected that when only using the previously as significant marked variables for the regression the regression itself will be far better and way less random noise be caught by omitting the insignificant ones. The results of the reduced regression show this is not true. They look very similar to the full regression on all predictors with almost the same plots and RSME values for both training and testing data. 
+
+## d)
+
+```{r}
+anova(model_lm_red, model_lm)
+```
+The RSS for both models has only a very small difference. Also the F-statistic is relatively low and the p-value for the F-test is $> 0.1$. This means there cannot be a significantly improved fitting of the model be observed by using the full model with more predictors. Therefore the smaller model should be used if at all, because there is no significant difference and the model should be held as small as it needs to be.
+
+# Task 4
+
+```{r, results='hide'}
+model_lm_step_back <- step(model_lm)
+```
+```{r, results='hide'}
+empty_model <- lm(log_Apps ~ 1, data = College_clean[train, ])
+model_lm_step_forward <- step(empty_model, 
+                              scope = list(lower = empty_model, 
+                                           upper = model_lm), 
+                              direction = "forward")
+```
+```{r}
+summary(model_lm_step_back)
+summary(model_lm_step_forward)
+```
+As w can observe, both forwards and backwards selection of the predictos result in exactly the same model. Therefore we only need to calculate the RMSE and visualise for one.
+```{r}
+pred_lm_train_back <- predict(model_lm_step_back, 
+                              newdata = College_clean[train, ])
+pred_lm_test_back <- predict(model_lm_step_back, 
+                             newdata = College_clean[test, ])
+```
+
+```{r}
+RMSE_train_back <- sqrt((1/n_train)*sum((observed_values_train - 
+                                           pred_lm_train_back)^2))
+RMSE_test_back <- sqrt((1/n_test)*sum((observed_values_test - 
+                                         pred_lm_test_back)^2))
+print(RMSE_train_back)
+print(RMSE_test_back)
+```
+```{r}
+plot(observed_values_train, pred_lm_train_back,
+     main = "backwards selecting model observed vs predicted (train set)", 
+     xlab = "observed log(Applications)", 
+     ylab = "predicted log(Applications)")
+abline(0, 1, col = "red", lwd = 2)
+
+plot(observed_values_test, pred_lm_test_back,
+     main = "backwards selecting model observed vs predicted (test set)", 
+     xlab = "observed log(Applications)", 
+     ylab = "predicted log(Applications)")
+abline(0, 1, col = "red", lwd = 2)
+```
+The RMSE values and the plots of predicted and observed values are again very similar to our models from. If we take a look at the predictions, we can observe that most are the same as in the reduced model, except Top25perc and Books ()which are not at that high significance levels). Therefore the similar results are not surprising.
+
+
