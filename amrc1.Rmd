@@ -1,0 +1,90 @@
+---
+title: "Advanced Methods for Regression and Classification"
+subtitle: "Exercise 1"
+author: "Bosse Behrens , st.id: 12347333"
+output: pdf_document
+---
+# Task 1
+```{r}
+library("ISLR")
+data(College,package="ISLR")
+?College
+str(College)
+summary(College)
+sum(is.na(College))
+```
+There are no missing values in the College data but for the "Texas A&M University at Galveston" the value for PhD (Pct. of faculty with Ph.D.'s) is at 103, which is obviously not a realistic possible percentage. For "Cazenovia College" the Graduation rate is at 118, which is also not possible. Therefore we delete these two observations since we don't know if it's just a typo and both values should be 100, or the data for the whole observation is corrupted. Also for "Private" we have values "yes" and "no" which we have to convert into a numeric varible for regression. We will use a dummy variable with 0 for "no" and 1 for "yes". Furthermore we want to transform very skewed variables such as "Apps". Looking at the summary, we see for the column "Apps" the max value is way more than 20 times the median value. This means there are some very large outliers that can make the distribution of the attribute very right-skewed which could lead to more variance since the large outliers have a great influence. therefore it makes sense to log-transform "Apps".
+```{r}
+library(dplyr)
+College <- College[!rownames(College) %in% c("Texas A&M University at Galveston", "Cazenovia College"), ]
+College <- College %>%
+  mutate(Private = recode(Private, "Yes" = 1, "No" = 0))
+College_clean <- College %>%
+  mutate(
+    log_Apps = log(Apps))%>%
+  select(-Apps)
+```
+
+
+
+# Task 2
+## a)
+```{r}
+set.seed(12347333)
+n <- nrow(College_clean)
+train <- sample(1:n, round((2/3) * n))
+test<-(1:n)[-train]
+model_lm <- lm(log_Apps ~ . - Enroll - Accept, data = College_clean, subset = train)
+```
+
+
+
+```{r}
+summary(model_lm)
+plot(model_lm)
+```
+The test of significance for the variable sin the models yields that Intercept, Private, F.Undergrad, Outstate, S.F.Ratio, perc.alumni, Expend and Grad.Rate all are very significant with a p-value of $< 0.001$. Additionally PhD is significant on a level of $< 0.01$, Room.Board on $<0.05$ and Top25perc on $<0.1$. The model assumptions are partly fulfilled but not perfectly so. In the residuals vs fitted values plot the residuals seem mostly randomly distributed around zero but have a slight curvature down for the higher fitted values. This could implicate some linear dependence between some of the variables. The qq-plot shows the residuals are not quite normally distributed since the line is curves down for the more negative residuals. The scale-location plot shows again the residuals are mostly homoscedastic but curves slightly upwards for the higher fitted values. This means variance is not perfectly the same for all levels of fitted values. The residuals vs leverage plot shows there are some observation that are clearly identifiable from the rest but still within limits of Cook's distance.
+## b)
+```{r}
+X <- model.matrix(log_Apps ~ . - Enroll - Accept, data = College_clean, subset = train)
+y <- College_clean[ ,"log_Apps"]
+ls_estimators <- solve(t(X)%*%X)%*%t(X)%*%y
+```
+
+```{r}
+lm_model_estimators <- coef(model_lm)
+df_estimators <- data.frame(
+  ls_estimators = ls_estimators,
+  lm_model_estimators = lm_model_estimators,
+  absolute_difference = abs(ls_estimators - lm_model_estimators))
+print(df_estimators)
+```
+Reading up on the documentation, R is handling binary variables by automatically transforming them into values $0$ and $1$ alphabetically (which we already did). The coefficient can be interpreted as the change of the predicted value if the binary variable is "yes" $(= 1)$ since it will then add $1\cdot\beta_{binary}$ to the predicted value, otherwise $0$.
+\
+Comparing the results we can observe they are not the same but the values are very similar relative to their range with only small deviations. The biggest difference is that for Top10Perc while not being a big difference in value it changes from positive for the manual method to negative using lm().
+
+## c)
+```{r}
+pred_lm_train <- predict(model_lm, newdata = College_clean[train, ])
+pred_lm_test <- predict(model_lm, newdata = College_clean[test, ])
+observed_values_train <- College_clean[train,"log_Apps"]
+observed_values_test <- College_clean[test,"log_Apps"]
+
+plot(observed_values_train, pred_lm_train)
+abline(0, 1, col = "red", lwd = 2)
+
+plot(observed_values_test, pred_lm_test)
+abline(0, 1, col = "red", lwd = 2)
+```
+The prediction performance of the model and its predictions are okay but not perfect. Looking at the plots both for the training and testing data a more fitting curve through the data points plotted (observations vs predictions) would be slightly curves. The points do not seem totally randomly distributed around the $x=y$ line. Especially on the ends of the range of the values the points for very small and large values seem to differ. This implicates that one or more of the model assumptions is not completely fulfilled.
+# d)
+```{r}
+n_train <- length(observed_values_train)
+n_test <- length(observed_values_test)
+RMSE_train <- sqrt((1/n_train)*sum((observed_values_train - pred_lm_train)^2))
+RMSE_test <- sqrt((1/n_test)*sum((observed_values_test - pred_lm_test)^2))
+print(RMSE_train)
+print(RMSE_test)
+```
+
+
