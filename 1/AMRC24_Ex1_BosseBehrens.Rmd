@@ -188,8 +188,13 @@ RMSE_train_back <- sqrt((1/n_train)*sum((observed_values_train -
                                            pred_lm_train_back)^2))
 RMSE_test_back <- sqrt((1/n_test)*sum((observed_values_test - 
                                          pred_lm_test_back)^2))
-print(RMSE_train_back)
-print(RMSE_test_back)
+RMSE_back <- c(RMSE_train_back, RMSE_test_back)
+RMSE_full <- c(RMSE_train, RMSE_test)
+RMSE_red <- c(RMSE_train_red, RMSE_test_red)
+results <- cbind(RMSE_full, RMSE_red, RMSE_back)
+rownames(results) <- c("training set", "testing set")
+colnames(results) <- c("full model", "reduced model", "backwards selection model")
+print(results)
 ```
 ```{r}
 plot(observed_values_train, pred_lm_train_back,
@@ -204,6 +209,7 @@ plot(observed_values_test, pred_lm_test_back,
      ylab = "predicted log(Applications)")
 abline(0, 1, col = "red", lwd = 2)
 ```
-The RMSE values and the plots of predicted and observed values are again very similar to our models from. If we take a look at the predictions, we can observe that most are the same as in the reduced model, except Top25perc and Books ()which are not at that high significance levels). Therefore the similar results are not surprising.
+
+The RMSE values and the plots of predicted and observed values are again very similar to our models from before. If we take a look at the predictions, we can observe that most are the same as in the reduced model, except Top25perc and Books (which are not at that high significance levels). Therefore the similar results are not surprising. From this we can conclude that all models already include most of the significant predictors that hold most of the information and a simple linear regression can not further improve our results.
 
 

@@ -1,0 +1,136 @@
+---
+title: "Advanced Methods for Regression and Classification"
+subtitle: "Exercise 1"
+author: "Bosse Behrens , st.id: 12347333"
+output: pdf_document
+---
+# Task 1
+```{r}
+load("building.RData")
+library(cvTools)
+library(leaps)
+```
+
+```{r}
+set.seed(1234)
+n <- nrow(df)
+train <- sample(1:n, round((2/3) * n))
+test<-(1:n)[-train]
+
+lm_model <- lm(y ~ ., data = df, subset = train)
+
+pred_lm_train <- predict(lm_model, newdata = df[train, ])
+obs_train <- df[train,"y"]
+
+plot(obs_train, pred_lm_train,
+     main = "full model observed vs predicted (train set)", 
+     xlab = "observed y", 
+     ylab = "predicted y")
+abline(0, 1, col = "red", lwd = 2)
+
+n_train <- length(obs_train)
+RMSE_train <- sqrt((1/n_train)*sum((obs_train - pred_lm_train)^2))
+
+print(RMSE_train)
+
+summary_lm <- summary(lm_model)
+summary_lm
+```
+
+
+
+
+
+
+
+
+```{r, warning=FALSE}
+cv_res <- cvFit(lm_model, data = df[train, ], y = obs_train, cost = rmspe, K = 5, R = 100)
+```
+```{r}
+plot(cv_res)
+```
+```{r, warning=FALSE}
+cv_rest <- cvFit(lm_model, data = df[train, ], y = obs_train, cost = rtmspe, K = 5, R = 100)
+```
+```{r}
+plot(cv_rest)
+```
+```{r}
+pred_lm_test <- predict(lm_model, newdata = df[test, ])
+obs_test <- df[test,"y"]
+
+n_test <- length(obs_test)
+n_test
+RMSE_test <- sqrt((1/n_test)*sum((obs_test - pred_lm_test)^2))
+
+
+plot(obs_test, pred_lm_test,
+     main = "full model observed vs predicted (test set)", 
+     xlab = "observed y", 
+     ylab = "predicted y")
+abline(0, 1, col = "red", lwd = 2)
+
+print(RMSE_test)
+```
+```{r}
+significant_predictors <- rownames(summary_lm$coefficients)[summary_lm$coefficients[, "Pr(>|t|)"] < 0.1]
+significant_predictors <- significant_predictors[significant_predictors != "(Intercept)"]
+significant_predictors
+
+significant_data <- df[, c("y", significant_predictors)]
+
+best_subset <- regsubsets(y ~ ., data = significant_data, nvmax = 10, really.big = TRUE)
+best_subset
+```
+```{r}
+plot(best_subset)
+```
+```{r}
+summary_best <- summary(best_subset)
+
+print(summary_best$adjr2)
+print(summary_best$bic)
+```
+```{r}
+best_predictors <- summary_best$which[10, ]
+selected_predictors <- names(best_predictors)[best_predictors]
+selected_predictors <- selected_predictors[selected_predictors != "(Intercept)"]
+```
+```{r}
+selected_data <- df[ , c("y", selected_predictors)]
+
+best_model <- lm(y ~ ., data = selected_data, subset = train)
+
+summary(best_model)
+```
+```{r, warning=FALSE}
+cv_res_b <- cvFit(best_model, data = df[train, c("y", selected_predictors)], y = obs_train, cost = rmspe, K = 5, R = 100)
+```
+```{r}
+plot(cv_res_b)
+```
+```{r, warning=FALSE}
+cv_res_bt <- cvFit(best_model, data = df[train, c("y", selected_predictors)], y = obs_train, cost = rtmspe, K = 5, R = 100)
+```
+```{r}
+plot(cv_res_bt)
+```
+```{r}
+pred_lmb_test <- predict(best_model, newdata = df[test, ])
+obs_test <- df[test,"y"]
+
+n_test <- length(obs_test)
+n_test
+RMSE_testb <- sqrt((1/n_test)*sum((obs_test - pred_lmb_test)^2))
+
+
+plot(obs_test, pred_lmb_test,
+     main = "full model observed vs predicted (test set)", 
+     xlab = "observed y", 
+     ylab = "predicted y")
+abline(0, 1, col = "red", lwd = 2)
+
+print(RMSE_testb)
+```
+
