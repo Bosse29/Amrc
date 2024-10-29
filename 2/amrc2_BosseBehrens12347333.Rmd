@@ -1,0 +1,162 @@
+---
+title: "Advanced Methods for Regression and Classification"
+subtitle: "Exercise 1"
+author: "Bosse Behrens , st.id: 12347333"
+output: pdf_document
+---
+# Task 1
+```{r}
+load("building.RData")
+library(cvTools)
+library(leaps)
+```
+
+## a)
+
+We split the data into training and testing set and create the full model using all 108 predictors. Then we plot the values of the resposnse vs. the predicted values and calculate the RMSE for the training data.
+```{r}
+set.seed(1234)
+n <- nrow(df)
+train <- sample(1:n, round((2/3) * n))
+test<-(1:n)[-train]
+
+lm_model <- lm(y ~ ., data = df, subset = train)
+
+pred_lm_train <- predict(lm_model, newdata = df[train, ])
+obs_train <- df[train,"y"]
+
+plot(obs_train, pred_lm_train,
+     main = "full model observed vs predicted (train set)", 
+     xlab = "observed y", 
+     ylab = "predicted y")
+abline(0, 1, col = "red", lwd = 2)
+
+n_train <- length(obs_train)
+RMSE_train <- sqrt((1/n_train)*sum((obs_train - pred_lm_train)^2))
+
+
+cat("RMSE of training data:", RMSE_train)
+
+summary_lm <- summary(lm_model)
+```
+
+## b)
+
+We use the cvFit() function from the cvTools package to perform 5-fold cross-validation with 100 replications and RMSE as cost function on the model with the training data set and plot the resulting distribution of the RMSE. As we can see the 50% interquartile and median are close to zero as we would expect for the RMSE from the data with a response that has value sin range 5-9 but there seem to be quite a few very big outliers with one even over 600. This means the model performs very poorly on some subsets due to overfitting or extreme outliers in the data. A solution would be to reduce the number of predictors and choose a better subset of predictors.
+```{r, warning=FALSE}
+set.seed(1234)
+cv_res <- cvFit(lm_model, data = df[train, ], y = obs_train, cost = rmspe, K = 5, R = 100)
+
+plot(cv_res)
+```
+
+## c)
+
+We perform the same cross validation again but with a trim of the 0.1 highest RMSE results. As we can observe in the plot the RMSE distribution is way better now ranging from ~0.15 to ~0.21. This si what we would expect from a model that is a good fit on the data. Also there are no outliers at all this time, meaning less than 0.1 are extreme big values.
+```{r, warning=FALSE}
+set.seed(1234)
+cv_rest <- cvFit(lm_model, data = df[train, ], y = obs_train, cost = rtmspe, K = 5, R = 100)
+
+plot(cv_rest)
+```
+
+## d)
+
+We plot the response vs the fitted values of the test data and calculate the RMSE. As we can see the RMSE is way worse than for the training data and would fall into the outliers of the RMSE in part c). In the plot we can clearly see that some points are far away from the $x=y$ line.
+```{r}
+pred_lm_test <- predict(lm_model, newdata = df[test, ])
+obs_test <- df[test,"y"]
+
+n_test <- length(obs_test)
+n_test
+RMSE_test <- sqrt((1/n_test)*sum((obs_test - pred_lm_test)^2))
+
+
+plot(obs_test, pred_lm_test,
+     main = "full model observed vs predicted (test set)", 
+     xlab = "observed y", 
+     ylab = "predicted y")
+abline(0, 1, col = "red", lwd = 2)
+
+cat("RMSE for test data:", RMSE_test)
+```
+
+# Task 2
+
+## a)
+
+As a very simple (and possibly sloppy) way to reduce the predictors we simply only include the predictors from the original full model that were significant at the $10%$ level. This leaves us with only 31 predictors instead of 108. On this we can now use regsubsets() with nvmax = 10 to get the best subsets for 1 to 10  predictors in a reasonable time.
+```{r}
+sign_p <- rownames(summary_lm$coefficients)[summary_lm$coefficients[, "Pr(>|t|)"] < 0.1]
+sign_p <- sign_p[sign_p != "(Intercept)"]
+print(sign_p)
+
+sign_data <- df[, c("y", sign_p)]
+
+best_subset <- regsubsets(y ~ ., data = sign_data, nvmax = 10, really.big = TRUE)
+```
+
+## b)
+
+We now plot the result object of the regsubset(). We gain a heat map that shows us the best combinations for 1 to 10 predictors and the correspondin g BIC value. Furthermore we can look at the adjusted R squared value of each model. The best model in terms of BIC/AdjR2 isa the model with 10 predictors. The models with 5 to 9 predictors perform only slightly worse so it is possible to argue to also select on of these since there is a balncing between the most promising in termns of evaluation statistics (BIC/AdjR2) and simplicity (fewer predictors). In this case we choose to go with the largest 10 predictors model.
+```{r}
+plot(best_subset)
+
+summary_best <- summary(best_subset)
+
+print(summary_best$adjr2)
+print(summary_best$bic)
+```
+
+## c)
+
+We select the names of the predictors of our chosen model and delete the intercept from them.
+```{r}
+best_predictors <- summary_best$which[10, ]
+selected_predictors <- names(best_predictors)[best_predictors]
+selected_predictors <- selected_predictors[selected_predictors != "(Intercept)"]
+```
+Now we create the new reduced model with chosen best subset.
+```{r}
+selected_data <- df[ , c("y", selected_predictors)]
+
+best_model <- lm(y ~ ., data = selected_data, subset = train)
+
+summary(best_model)
+```
+Now we repeat the steps from 1b and 1c using cvFit() once with cost = rmspe and once with the trimmed rtmspe on the subset of predicotrs with the training data. As we can observe now for both the normal RMSE and the trimmed cost functions both distributions of the RMSE are very low. From these consistent and good values we can conclude that the model now fits the data way better than before. Also when looking at the model summary we see that the R squared and F-statistic are very high which supports this conclusion.
+```{r, warning=FALSE}
+set.seed(1234)
+cv_res_b <- cvFit(best_model, data = df[train, c("y", selected_predictors)], y = obs_train, cost = rmspe, K = 5, R = 100)
+
+plot(cv_res_b)
+```
+
+```{r, warning=FALSE}
+set.seed(1234)
+cv_res_bt <- cvFit(best_model, data = df[train, c("y", selected_predictors)], y = obs_train, cost = rtmspe, K = 5, R = 100)
+
+plot(cv_res_bt)
+```
+
+## d)
+
+As we can see the RMSE is much lower than on the previous full model using the test data. It also is similar now to the RMSE of the training data which again supports the conclusion that the model is now now well suited to the data. The plot furthermore shows that the resposne vs fitted values are randomly scattered around $x=y$ without extreme outleirs as before.
+```{r}
+pred_lmb_test <- predict(best_model, newdata = df[test, ])
+obs_test <- df[test,"y"]
+
+n_test <- length(obs_test)
+n_test
+RMSE_testb <- sqrt((1/n_test)*sum((obs_test - pred_lmb_test)^2))
+
+
+plot(obs_test, pred_lmb_test,
+     main = "full model observed vs predicted (test set)", 
+     xlab = "observed y", 
+     ylab = "predicted y")
+abline(0, 1, col = "red", lwd = 2)
+
+print(RMSE_testb)
+```
+
