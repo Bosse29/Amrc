@@ -1,0 +1,128 @@
+---
+title: "Advanced Methods for Regression and Classification"
+subtitle: "Exercise 2"
+author: "Bosse Behrens , st.id: 12347333"
+output: pdf_document
+---
+# Task 1
+```{r}
+load("building.RData")
+library(pls)
+```
+```{r}
+set.seed(1234)
+n <- nrow(df)
+train <- sample(1:n, round((2/3) * n))
+test<-(1:n)[-train]
+```
+
+```{r}
+model_pcr <- pcr(y ~ ., data=df, subset=train, scale=TRUE,validation="CV",segments=10,segment.type="random")
+```
+
+```{r}
+validationplot(model_pcr, val.type = "RMSEP")
+
+cv_rmse <- RMSEP(model_pcr, estimate = "CV")$val
+rmse_subset <- cv_rmse[65:75]
+
+rmse_results <- data.frame(Component = 65:75, RMSE = rmse_subset)
+print(rmse_results)
+```
+```{r}
+predplot(model_pcr, ncomp = 69)
+abline(0, 1, col = "red", lwd = 2)
+```
+```{r}
+test_pred <- predict(model_pcr, newdata=df[test, ], ncomp=69)
+obs_test <- df[test, "y"]
+
+plot(obs_test, test_pred)
+abline(0, 1, col = "red", lwd = 2)
+```
+```{r}
+n_test <- length(obs_test)
+
+RMSE_test <- sqrt((1/n_test)*sum((obs_test - test_pred)^2))
+RMSE_test
+```
+```{r}
+model_pls <- plsr(y ~ ., data=df, scale=TRUE, subset=train, validation="CV", segments=10, segment.type="random")
+```
+
+```{r}
+validationplot(model_pls, val.type = "RMSEP")
+
+cv_rmse_pls <- RMSEP(model_pls, estimate = "CV")$val
+rmse_subset_pls <- cv_rmse[65:75]
+
+rmse_results_pls <- data.frame(Component = 65:75, RMSE = rmse_subset_pls)
+print(rmse_results_pls)
+```
+```{r}
+predplot(model_pls, ncomp = 69)
+abline(0, 1, col = "red", lwd = 2)
+```
+
+```{r}
+test_pred_pls <- predict(model_pls, newdata=df[test, ], ncomp=69)
+obs_test <- df[test, "y"]
+
+plot(obs_test, test_pred_pls)
+abline(0, 1, col = "red", lwd = 2)
+```
+
+```{r}
+n_test <- length(obs_test)
+
+RMSE_test_pls <- sqrt((1/n_test)*sum((obs_test - test_pred_pls)^2))
+RMSE_test_pls
+```
+
+```{r}
+coef_pcr <- coef(model_pcr, ncomp = 69, intercept = FALSE)
+coef_pls <- coef(model_pls, ncomp = 69, intercept = FALSE)
+
+plot(coef_pcr, coef_pls)
+abline(0, 1, col = "red", lwd = 2)
+```
+```{r}
+coef_pcr_int <- coef(model_pcr, ncomp = 69, intercept = TRUE)
+coef_pls_int <- coef(model_pls, ncomp = 69, intercept = TRUE)
+
+plot(coef_pcr_int, coef_pls_int)
+abline(0, 1, col = "red", lwd = 2)
+```
+```{r}
+scores_pcr <- model_pcr$scores[, 1:2]     # Z1, Z2
+loadings_pcr <- model_pcr$loadings[, 1:2] # V1, V2
+
+scores_pls <- model_pls$scores[, 1:2]     # T1, T2
+loadings_pls <- model_pls$loadings[, 1:2] # W1, W2
+
+```
+
+```{r}
+par(mfrow = c(2, 2))
+
+# Plot 1: PCR Scores (Z1 vs. Z2)
+plot(scores_pcr[, 1], scores_pcr[, 2], 
+     xlab = "Z1 (First Score)", ylab = "Z2 (Second Score)",
+     main = "PCR Scores (Z1 vs Z2)", pch = 19, col = "blue")
+
+# Plot 2: PCR Loadings (V1 vs. V2)
+plot(loadings_pcr[, 1], loadings_pcr[, 2], 
+     xlab = "V1 (First Loading)", ylab = "V2 (Second Loading)",
+     main = "PCR Loadings (V1 vs V2)", pch = 19, col = "green")
+
+# Plot 3: PLS Scores (T1 vs. T2)
+plot(scores_pls[, 1], scores_pls[, 2], 
+     xlab = "T1 (First Score)", ylab = "T2 (Second Score)",
+     main = "PLS Scores (T1 vs T2)", pch = 19, col = "purple")
+
+# Plot 4: PLS Loadings (W1 vs. W2)
+plot(loadings_pls[, 1], loadings_pls[, 2], 
+     xlab = "W1 (First Loading)", ylab = "W2 (Second Loading)",
+     main = "PLS Loadings (W1 vs W2)", pch = 19, col = "orange")
+```
+
