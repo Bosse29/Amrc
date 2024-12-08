@@ -1,0 +1,124 @@
+---
+title: "Advanced Methods for Regression and Classification"
+subtitle: "Exercise 5"
+author: "Bosse Behrens , st.id: 12347333"
+output: pdf_document
+---
+First we laod the data
+```{r}
+library(ROCit)
+data("Loan")
+```
+
+## Task 1
+
+We take a look at the structrue of our data.
+```{r}
+str(Loan)
+summary(Loan)
+```
+the summary suggests that Amount and Income are both very reight-skewed. We take a look at the ditributions.
+```{r}
+hist(Loan$Amount)
+hist(Loan$Income)
+```
+We apply some preprocessing. first we need to transform the response Status from a factor to a numerical variable to be able to regress on it (with 0 and 1 as new values). Amount and Income we log-transform so prevent the skewedness. At last the rpedictor term can be removed sicne it has the same value for every observation and carries therefore no variance and predictive value.
+```{r}
+library(dplyr)
+
+Loan <- Loan %>% select(-Term)
+Loan <- Loan %>% mutate(Amount = log(Amount))
+Loan <- Loan %>% mutate(Income = log(Income))
+Loan$Status <- as.numeric(Loan$Status) - 1
+```
+
+Setting up the train/test split.
+```{r}
+set.seed(12347333)
+n <- nrow(Loan)
+train <- sample(1:n, round((2/3) * n))
+test<-(1:n)[-train]
+
+y_train <- Loan[train,"Status"]
+y_test <- Loan[test, "Status"]
+```
+Building the model with lm().
+```{r}
+lm_model <- lm(Status ~ ., data = Loan[train, ])
+```
+
+## Task 3
+
+```{r}
+summary(lm_model)
+```
+Only 3 predictors are significant and that only at the $0.1$ significance level. Furthermore the adjusted R-squared is $0.04467$. We can conclude that the model/predictors is/are not very well-suited and cannot explain most of the variance.
+
+## Task 3
+
+```{r}
+plot(lm_model)
+```
+Wen can see in the residuals vs fitted values two lines that are the two classes. These lines run parallely and have a large overlap in terms of the fitted values. This is reason to worry about since it means the model cannnot really distinguish between the classes.
+
+## Task 4
+
+```{r}
+y_predictions <- predict(lm_model, newdata = Loan[train, ])
+
+plot(y_train, y_predictions)
+```
+As noticed before the predictions for both classes have a very large overlap. A good cutoff value should divide both classes in their prediciton. This is not really possible in this case. A cutoff value optimized by some metric like the balanced accuracy can not be easily concluded by just looking at the plot so the only thing we can do is choosing the cutoff value so either all positives are classified as such or all negatives as negatives. To classify all positives correctly is the mroe common approach sow e choose to do that. The resulting cutoff value would be $\approx 0.58$.
+
+## Task 5
+
+We use the cotoff value for the classification for thre predicitons.
+```{r}
+cutoff <- 0.58  # Initial cutoff value
+train_pred_class <- ifelse(y_predictions >= cutoff, 1, 0)
+
+# Confusion Matrix
+confusion_matrix <- table(Actual = Loan[train, ]$Status, Predicted = train_pred_class)
+print(confusion_matrix)
+```
+We chose the cutoff value so at least all positives get classified correctly. the resulting confusion matrix shows that by doing so also almost all negatives get falsely classified as positives. The conclusion is that the model is very bad and distinguishing between the two classes.
+
+## Task 6
+
+```{r}
+rocit_model <- rocit(class = Loan[train, ]$Status, score = y_predictions)
+
+summary(rocit_model)
+
+plot(rocit_model)
+```
+The area under curve (AUC) value indicates the quality of the classification. This value should ideally be 1 which means it perfectly classifies everything. A value of 0.5 refers to random group assignment and thus a poor classifier. The value in our case is 0.6863 which is not very good and means the classifier does not perform well.
+The "top-leftmost" point which is indicated in the plot would taken to compute the optimal cutoff value.
+
+## Task 7
+
+We compute the table with the TPR and TNR values and compute the balanced accuracy using these. Then we plot the balanced accuracy vs the cutoff value. The optimal cutoff value would be the maximum in the plot, meaning where the balanced accuracy is the highest.
+```{r}
+measure <- measureit(y_predictions, Loan[train, ]$Status, measure=c("TPR","TNR"))
+
+balanced_acc <- (measure$TPR + measure$TNR)/2
+
+plot(measure$Cutoff, balanced_acc)
+
+optimal_cutoff <- measure$Cutoff[which.max(balanced_acc)]
+print(optimal_cutoff)
+```
+We get the resulting optimal cutoff value of $0.8085497$.
+
+## Task 8
+
+Using the computed optimal cutoff value from the previous task we then use this to make the class predictions with our model on the test data.
+```{r}
+y_test_pred <- predict(lm_model, newdata = Loan[test, ])
+test_pred_class <- ifelse(y_test_pred >= optimal_cutoff, 1, 0)
+
+test_confusion_matrix <- table(Actual = Loan[test, ]$Status, Predicted = test_pred_class)
+print(test_confusion_matrix)
+```
+Optimally only values on the diagonal of the confusion matrix should be non-zero and all others as low as possible. As we can see for the test data still many observations are not correctly predicted with only half of the negatives and about two thirds of the positives. This is slightly better than on the training data with initial cutoff value we got by just looking at the plot, but overall still not good. This means the model might just not be very well-suited for this classification problem or there are further underlying structures in the data we failed to capture so far.
+
