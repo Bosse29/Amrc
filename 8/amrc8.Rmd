@@ -1,0 +1,220 @@
+---
+title: "Advanced Methods for Regression and Classification"
+subtitle: "Exercise 8"
+author: "Bosse Behrens , st.id: 12347333"
+output: pdf_document
+---
+
+```{r}
+library(gclus)
+data(ozone)
+```
+
+```{r}
+set.seed(1234)
+n <- nrow(ozone)
+train <- sample(1:n, round((2/3) * n))
+test<-(1:n)[-train]
+
+train_x <- ozone[train, "Temp"]
+train_y <- ozone[train, "Ozone"]
+
+test_x <- ozone[test, "Temp"]
+test_y <- ozone[test, "Ozone"]
+```               
+
+```{r}
+lecturespl<-function(x,nknots=2,M=4){
+  
+  n<-length(x)                      
+  X<-matrix(NA,nrow=n,ncol=(M-1)+nknots)
+  
+  for(i in 1:(M-1)){X[,i]<-x^i}
+  
+  quant<-seq(0,1,1/(nknots+1))[c(2:(nknots+1))]
+  
+  qu<-quantile(x,quant)
+  
+  for(i in M:(M+nknots-1)){
+    
+    X[,i]<-ifelse(x-qu[i-M+1]<0,0,(x-qu[i-M+1])^(M-1))
+  }
+  
+  list(X=X,quantiles=quant,xquantiles=qu)
+  
+}
+```
+
+```{r}
+spline <- lecturespl(train_x, 2, 4)
+
+str(spline)
+
+plotspl <- function(splobj,x,...){
+  matplot(x,splobj$X,type="l",lty=1,
+          xlab="x",ylab="h(x)",...)
+  abline(v=splobj$xquantiles,lty=3,col=gray(0.5)) 
+  
+}
+
+plotspl(spline, train_x)
+```
+```{r}
+sorted_indices <- order(train_x)
+sorted_x <- train_x[sorted_indices]
+sorted_y <- train_y[sorted_indices]
+
+sorted_spline <- lecturespl(sorted_x, 2, 4)
+
+train_spline_df <- as.data.frame(sorted_spline$X)
+colnames(train_spline_df) <- paste0("X", 1:ncol(train_spline_df))
+
+model_spline <- lm(sorted_y ~ ., data=train_spline_df)
+
+pred_train <- predict(model_spline, newdata = data.frame(sorted_spline$X))
+
+plot(train_x, train_y, main="Ozone vs. Temperature with Predictions",
+     xlab="Temperature", ylab="Ozone", pch=16, col="blue")
+lines(sorted_x, pred_train, col="red", lwd=2)
+legend("topright", legend=c("Data", "Predictions"), 
+       col=c("blue", "red"), pch=c(16, NA), lty=c(NA, 1), lwd=c(NA, 2))
+```
+
+```{r}
+sorted_test <- order(test_x)
+sort_test_x <- test_x[sorted_test]
+sort_test_y <- test_y[sorted_test]
+
+test_spline <- lecturespl(sort_test_x, 2, 4)
+test_spline_df <- as.data.frame(test_spline$X)
+colnames(test_spline_df) <- colnames(train_spline_df) 
+
+test_pred <- predict(model_spline, newdata = test_spline_df)
+
+plot(train_x, train_y, main="Training and Test Sets with Predictions",
+     xlab="Temperature", ylab="Ozone", pch=16, col="blue", xlim=range(c(train_x, test_x)), ylim=range(c(train_y, test_y)))
+
+lines(sorted_x, pred_train, col="red", lwd=2)
+
+points(sort_test_x, sort_test_y, col="green", pch=16)
+
+lines(sort_test_x, test_pred, col="orange", lwd=2)
+
+legend("topleft", legend=c("Training Data", "Training Predictions", "Test Data", "Test Predictions"),
+       col=c("blue", "red", "green", "orange"), pch=c(16,NA,16,NA),lwd=c(NA,2,NA,2))
+```
+
+
+```{r}
+new_temp <- seq(0,120)
+
+new_spline <- lecturespl(new_temp, nknots = 2, M = 4)
+
+new_spline_df <- as.data.frame(new_spline$X)
+colnames(new_spline_df) <- colnames(train_spline_df) 
+
+new_predictions <- predict(model_spline, newdata = new_spline_df)
+```
+
+```{r}
+plot(train_x, train_y, main="Training and Test Sets with Predictions",
+     xlab="Temperature", ylab="Ozone", pch=16, col="blue", xlim=c(0, 120), ylim = range(c(sorted_y, sort_test_y, new_predictions)))
+
+lines(sorted_x, pred_train, col="red", lwd=2)
+
+points(sort_test_x, sort_test_y, col="green", pch=16)
+
+lines(sort_test_x, test_pred, col="orange", lwd=2)
+
+lines(new_temp, new_predictions, col = "purple", lwd = 2)
+
+
+legend("bottomleft", legend = c("Training Data", "Training Predictions", 
+                              "Test Data", "Test Predictions", 
+                              "Extended Predictions"),
+       col = c("blue", "red", "green", "orange", "purple"),
+       pch = c(16, NA, 16, NA, NA), lty = c(NA, 1, NA, 1, 1), lwd = c(NA, 2, NA, 2, 2))
+```
+
+```{r}
+lecturespl_1 <- function(x, nknots = 2, M = 4, knots = NULL) {
+  n <- length(x)
+  X <- matrix(NA, nrow = n, ncol = (M - 1) + nknots)
+  
+  for (i in 1:(M - 1)) {
+    X[, i] <- x^i
+  }
+  
+  if (is.null(knots)) {
+    quant <- seq(0, 1, 1 / (nknots + 1))[c(2:(nknots + 1))]
+    knots <- quantile(x, quant)
+  }
+  
+  for (i in M:(M + nknots - 1)) {
+    X[, i] <- ifelse(x - knots[i - M + 1] < 0, 0, (x - knots[i - M + 1])^(M - 1))
+  }
+  
+  list(X = X, knots = knots)
+}
+```
+
+```{r}
+train_spline <- lecturespl_1(sorted_x, nknots = 2, M = 4)
+train_knots <- train_spline$knots
+
+new_spline <- lecturespl_1(new_temp, nknots = 2, M = 4, knots = train_knots)
+
+new_spline_df <- as.data.frame(new_spline$X)
+colnames(new_spline_df) <- colnames(train_spline_df)
+
+new_predictions <- predict(model_spline, newdata = new_spline_df)
+```
+
+
+```{r}
+plot(train_x, train_y, main="Training and Test Sets with Predictions",
+     xlab="Temperature", ylab="Ozone", pch=16, col="blue", xlim=c(0, 120), ylim = range(c(sorted_y, sort_test_y, new_predictions)))
+
+lines(sorted_x, pred_train, col="red", lwd=2)
+
+points(sort_test_x, sort_test_y, col="green", pch=16)
+
+lines(sort_test_x, test_pred, col="orange", lwd=2)
+
+lines(new_temp, new_predictions, col = "purple", lwd = 2)
+
+
+legend("topleft", legend = c("Training Data", "Training Predictions", 
+                              "Test Data", "Test Predictions", 
+                              "Extended Predictions"),
+       col = c("blue", "red", "green", "orange", "purple"),
+       pch = c(16, NA, 16, NA, NA), lty = c(NA, 1, NA, 1, 1), lwd = c(NA, 2, NA, 2, 2))
+```
+
+```{r}
+model_spline <- lm(log(sorted_y) ~ ., data=train_spline_df)
+
+pred_train <- predict(model_spline, newdata = data.frame(sorted_spline$X))
+test_pred <- predict(model_spline, newdata = test_spline_df)
+new_predictions <- predict(model_spline, newdata = new_spline_df)
+```
+
+```{r}
+plot(train_x, train_y, main="Training and Test Sets with Predictions",
+     xlab="Temperature", ylab="Ozone", pch=16, col="blue", xlim=c(0, 120), ylim = range(c(sorted_y, sort_test_y, new_predictions)))
+
+lines(sorted_x, exp(pred_train), col="red", lwd=3)
+
+points(sort_test_x, sort_test_y, col="green", pch=16)
+
+lines(sort_test_x, exp(test_pred), col="orange", lwd=3, lty=2)
+
+lines(new_temp, exp(new_predictions), col = "purple", lwd = 3,lty=3)
+
+
+legend("topleft", legend = c("Training Data", "Training Predictions", 
+                              "Test Data", "Test Predictions", 
+                              "Extended Predictions"),
+       col = c("blue", "red", "green", "orange", "purple"),
+       pch = c(16, NA, 16, NA, NA), lty = c(NA, 1, NA, 2, 3), lwd = c(NA, 2, NA, 2, 2))
+```
