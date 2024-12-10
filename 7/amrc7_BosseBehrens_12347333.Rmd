@@ -1,0 +1,236 @@
+---
+title: "Advanced Methods for Regression and Classification"
+subtitle: "Exercise 7"
+author: "Bosse Behrens , st.id: 12347333"
+output: pdf_document
+---
+First we load the data.
+```{r}
+d <- read.csv2("bank.csv")
+```
+
+## Task 1
+
+### part a
+
+We split the train and test data and transform for the response y yes/no into 1/0 facotrs so glm() with binomial family can work with it.
+```{r}
+set.seed(12347333)
+n <- nrow(d)
+train <- sample(1:n, 3000)
+test<-(1:n)[-train]
+d$y <- ifelse(d$y == "yes", 1, 0)
+d$y <- factor(d$y, levels = c(0, 1))
+```
+We use logistic regression to train a model on the train data.
+```{r}
+glm_model <- glm(y ~ . - duration, family="binomial", data = d, subset = train)
+summary(glm_model)
+```
+The summary shows us the estimators for the coefficients, st. errors based on the second derivative of the log-likelihood function at the maximum and their z-test statistics and respective p-values. In logisitic regression the coefficients can directly be interpreted as the change in the log-odds (probability) of the outcome. This means negative coeffiecients have reduce the probabilioty of success, e.g. 0/no as the outcome of the response becomes more likely, while positive coefficients increase it and contribute to a higher chance of success, e.g. 1/yes as the response class. This also provides information about which variables are well suitable for separating classes and which do not.
+Also the predictors with low p-values are as usually marked if they are significant at he common used levels. For example contact with the dummy variable of class unknown seems to be significant at $0.001$ and has a negative coefficient, which would mean in this mdoiel it is very significant and decreases the log-odds of success. poutcome success, which is the dummy variable for the class success in poutcome that denotes if there has been a past attemp succesful attempt at a subscription, is also very significant but has a positive coefficient, which means it increases the chances of success. 
+Furthermore we have the deviances which are the negative contributions to the log-likelihood function. The Null deviance refers to the empty model and the residual deviuance to the full model. Since the residual deviance is loeer than the null, this means the full model provides a better fit than the empty model, even though the difference of $320.4$ might not be that much compared to the absolute values.
+
+### part b
+
+We use the trained model to predict the classes of the test data observations. By default the predictions are returned in scale of the linear predictort, which means that $0$ is the decision boundary. We therefore set the predicted classes with 0 as this deciiosn boundary.
+```{r}
+y_pred <- predict(glm_model, newdata = d[test,])
+pred_class <- ifelse(y_pred > 0, 1, 0)
+```
+Similar to Exercise 6 we now use the predicted and actual classes of the test data to get the confusion matrix and calculate the seperate misclassification rates for each group and the balanced accuracy.
+```{r}
+y_actual <- d[test,]$y
+cm_test <- table(Predicted = pred_class, Actual = y_actual)
+
+TP <- cm_test["1", "1"]
+TN <- cm_test["0", "0"]
+FP <- cm_test["1", "0"]
+FN <- cm_test["0", "1"] 
+
+misclass_rate_0 <- FP / (TN + FP)
+misclass_rate_1 <- FN / (TP + FN)
+
+TPR <- TP / (TP + FN)
+TNR <- TN / (TN + FP)
+balanced_accuracy <- (TPR + TNR) / 2
+
+
+cat("Confusion Matrix:\n")
+print(cm_test)
+cat("\nMisclassification Rate for no:", misclass_rate_0, "\n")
+cat("Misclassification Rate for yes:", misclass_rate_1, "\n")
+cat("Balanced Accuracy:", balanced_accuracy, "\n")
+```
+As we can see the misclassification rate for "no" is very low with $\approx 0.01$, while the rate for "yes" is really high with $\approx 0.85$. This is to be expcetd since the data is very unbalanced towards "no" observations which reuslts in a very bad ability to predict "yes". The balanced accuracy is at $\approx 0.57$ and therefore bad, only marginally better than random guessing ($0.5$).
+
+### part c
+
+We now want to assign weights to the observations. these should be so that the obserrvations of the minority class "yes" are weighted way higher than of the majority classes "no". We there fore take weights of $\frac{number\ of\ observations\ in\ class}{total\ observations}$ for the observations of each class. We then input these into the weights argument of the glm() function and train the model again with these new weights.
+```{r}
+prior_prob <- prop.table(table(d$y))
+class_weights <- ifelse(d$y == 0, 1/prior_prob["0"], 1/prior_prob["1"])
+
+glm_model_weighted <- glm(y ~ . - duration, family="binomial", data = d[train,], 
+                          weights = class_weights[train])
+```
+We again predict the class for the test data as before.
+```{r}
+y_pred <- predict(glm_model_weighted, newdata = d[test,])
+pred_class <- ifelse(y_pred > 0, 1, 0)
+```
+Similar to before we again compute confusion matrix, misclassificationr ates and balanced accuracy.
+```{r}
+y_actual <- d[test,]$y
+cm_test <- table(Predicted = pred_class, Actual = y_actual)
+
+TP <- cm_test["1", "1"]
+TN <- cm_test["0", "0"]
+FP <- cm_test["1", "0"]
+FN <- cm_test["0", "1"] 
+
+misclass_rate_0 <- FP / (TN + FP)
+misclass_rate_1 <- FN / (TP + FN)
+
+TPR <- TP / (TP + FN)
+TNR <- TN / (TN + FP)
+balanced_accuracy <- (TPR + TNR) / 2
+
+
+cat("Confusion Matrix:\n")
+print(cm_test)
+cat("\nMisclassification Rate for no:", misclass_rate_0, "\n")
+cat("Misclassification Rate for yes:", misclass_rate_1, "\n")
+cat("Balanced Accuracy:", balanced_accuracy, "\n")
+```
+As we can see the misclassification rates are not as unbalanced anymore, with the rate for "no" being way higher, but for "yes" being way lower. The balanced accuracy is now at $\approx 0.66$ which is significantly better than without the wights, but still not very good.
+
+### part d
+
+We choose and train a model using stepwise feature selection with step(), similar to the lecture notes. We don't show the output of that since it is way too long.
+```{r, include=FALSE}
+model_step <- step(glm_model_weighted,direction="both")
+```
+We get the summary of the reuslting model.
+```{r}
+summary(model_step)
+```
+As we can see the stepwise selection has now discarded previous, balance, education, day, pdays and age, thus giving us a reduced model. We now again predict the classes for the test data.
+```{r}
+y_pred <- predict(model_step, newdata = d[test,])
+pred_class <- ifelse(y_pred > 0, 1, 0)
+```
+Again, confusion matrix, misclassification ratres and balanced accuracy are computed.
+```{r}
+y_actual <- d[test,]$y
+cm_test <- table(Predicted = pred_class, Actual = y_actual)
+
+TP <- cm_test["1", "1"]
+TN <- cm_test["0", "0"]
+FP <- cm_test["1", "0"]
+FN <- cm_test["0", "1"] 
+
+misclass_rate_0 <- FP / (TN + FP)
+misclass_rate_1 <- FN / (TP + FN)
+
+TPR <- TP / (TP + FN)
+TNR <- TN / (TN + FP)
+balanced_accuracy <- (TPR + TNR) / 2
+
+
+cat("Confusion Matrix:\n")
+print(cm_test)
+cat("\nMisclassification Rate for no:", misclass_rate_0, "\n")
+cat("Misclassification Rate for yes:", misclass_rate_1, "\n")
+cat("Balanced Accuracy:", balanced_accuracy, "\n")
+```
+As we can see the individual misclassification rates, as well as the balanced accuracy of $\approx 0.66$ (almost same as before) change by almost nothing: therefore this reduced model is no improvement in regards of these evaluation measures.
+
+## Task 2
+
+We load the data and get the response as factors.
+```{r}
+library(ISLR)
+data(Khan)
+y_train <- as.factor(Khan$ytrain)
+y_test <- as.factor(Khan$ytest)
+```
+
+### part a
+
+LDA and QDA both compute covariance matrices (which are pxp, with p = number of predictos), LDA one for everything and QDA one for each class of the repsonse. These matrices get inverted in the process of the model calculations. The (train) data is very high dimensional but has only few observations (63 x 2308). This means the resulting convariance matrices would be singular and thus not invertible. The lda() and qda() fucntions of the mass package have some internal techniques so these matrices can not become singular and the resulting function calls would not throw an error, but there is still very much collinearity and the resulting models would not be stable or reliable at all. Dimension reduction techniques or feature selection also makes no sense with this many predictor variables. RDA could theoretically work since it adds regularization to the covariance matrix estimation that shrinks it towards a diagonal form, that can help with high-dimensionality issues. Practically though it is way too computationally expensive for this high dimensional data due to the matrix operations and optimization that the regularization requires and therefore also not really feasible.
+
+### part b
+
+Loading the required package.
+```{r}
+library(glmnet)
+```
+training the model.
+```{r}
+cvglm_model <- cv.glmnet(Khan$xtrain, y_train, family = "multinomial", type.measure = "class")
+```
+plotting the resulting object.
+```{r}
+plot(cvglm_model)
+cvglm_model$lambda.1se
+summary(cvglm_model)
+```
+Using type.measure = "class" in cv.glmnet and then plotting the objectr esults in a plot of the Misclassification error vs $log(\lambda)$. The vertical line shows the minimal miscl. error and the second vertical line (which is the same) the minimal error plus the standard error which usually gives a simpler model with only slightly worse performance. This optimal value of logged lambda is at 7 non-zero features, which means a huge reduction from the original 2308 predictors. The defulat for cv.glmnet() is Lasso, which means feature selection by shrinking them towards zero. The object function that is minimized is the negative log-likelihood (maximizing the log-likelihood). We can conclude that using this we could apply feature selection to reduce a future model in dimensionality by a very large amount. also this probably means that many of the predictors contribute mostly noise and no information.
+
+### part c
+
+We get all the variables that are estimated for each group and omit all the zero values.For this we use the 1se rule which would take the $\lambda$-value with the miniaml misclassification rate plus the standard error, but in our case it doesnt make adifference which rule we paply since the two vertical lines in the plot overlap.
+```{r}
+coefficients <- coef(cvglm_model, s = "lambda.1se")
+
+non_zero_coefficients <- lapply(coefficients, function(class_coef) {
+  class_coef <- as.matrix(class_coef)
+  class_coef[class_coef != 0, , drop = FALSE]
+})
+
+non_zero_coefficients
+```
+Here can see which variables contribute to which class.
+
+### part d
+
+We select V836 from group 1 that has an estimated coefficient of $\approx 0.27$. For the other 3 groups it was not in the list of non-zero coefficients. We plot the distribution of this variable in a boxplot for each of the 4 classes.
+```{r}
+selected_variable <- Khan$xtrain[,836]
+
+plot_data <- data.frame(
+  Variable = selected_variable,
+  Response = as.factor(Khan$ytrain)
+)
+
+boxplot(Variable ~ Response, data = plot_data,
+        main = "distribution of V836 in groups",
+        xlab = "response group",
+        ylab = "V836",
+        col = "lightblue")
+```
+As we can see, the distribution of V836 for group 1 contains only positive values with the interquartile range at $\approx [0.2,1.2]$. For the other three classes all values seem to be negative and the interquartile ranges also all in the negative. Therefore there seems to be an influence of predictors on specific classes and they are good decision boundaries to classify a specific class.
+
+### e
+
+We now use the trained model to predict the classes of the test data.
+```{r}
+class_probabilities <- predict(cvglm_model, newx = Khan$xtest, s = "lambda.1se")
+
+predicted_classes <- apply(class_probabilities, 1, which.max)
+```
+Now using the prediciotns we calculate the confusion matrix and then the misclassification rate.
+```{r}
+confusion_matrix <- table(Predicted = predicted_classes, Actual = y_test)
+
+print(confusion_matrix)
+
+misclassification_error <- 1 - sum(diag(confusion_matrix)) / sum(confusion_matrix)
+
+cat("Misclassification Error:", misclassification_error, "\n")
+```
+As we can see the classification worked perfectly on the test data with a misclassification rate of zero and diagonal confusion matrix. Therefore it seems multinomial logistic regression worked very well on this data and is the right choice, because certain predictors are very good indicators for which class the observation belongs to.
+
+
+

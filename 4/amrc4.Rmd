@@ -1,0 +1,158 @@
+---
+title: "Advanced Methods for Regression and Classification"
+subtitle: "Exercise 3"
+author: "Bosse Behrens , st.id: 12347333"
+output: pdf_document
+---
+
+```{r}
+load("building.RData")
+library(glmnet)
+```
+Setting up the training and testing data split the same as in exercise 2.
+```{r}
+set.seed(1234)
+n <- nrow(df)
+train <- sample(1:n, round((2/3) * n))
+test<-(1:n)[-train]
+
+y_train <- df[train,"y"]
+y_test <- df[test,"y"]
+```
+
+# Task 1
+
+## a)
+
+Setting up the model with the spcified parameters.
+```{r}
+ridge_model <- glmnet(as.matrix(df[train,-1]),df[train,"y"],alpha=0)
+
+head(ridge_model$lambda)
+plot(ridge_model, xvar="lambda")
+```
+The default values for the lambda parameter is a computed sequence of values that decrease, starting from a large value where all coefficients are nearly zero down to a way smaller value to cover a good range of models with varying strengths. In the Elastic Net regression glmnet() uses, when alpha $\alpha$ is zero it adds only an L" penalty to the regression which makes all coefficients go towards zero but not completely, so does no variable selection. This reduces multicolinearity among predictors and gives reduced influence on predictors that are less correlated with the response.\
+In the plot we can see the Ridge regression coefficients for varying values of the tuning parameter $\lambda$. With increasing λ, the coefficients are more and more shrunk towards zero. The solution at the very left is the LS solution. On top we can see the number of variables in the model.
+
+## b)
+
+Setting up the cv.glmnet().
+```{r}
+ridge_cv <- cv.glmnet(as.matrix(df[train,-1]),df[train,"y"],alpha=0)
+plot(ridge_cv)
+```
+The plot shows the Mean-Squared Error (red dots) with the standard errors (grey intervals) over the log-transformed $\lambda$ parameter values. The left vertical line is the smallest MSE and the right one is the optimal $\lambda$ for which the MSE is below the smallest MSE plus its standard error. By default this $\lambda$ is selected with the one-standard error rule. We now apply this rule ("1se") to the model and get the selected coefficients.
+```{r}
+coef_ridge <- coef(ridge_cv,s="lambda.1se")
+head(coef_ridge)
+```
+
+## c)
+
+We now use the optimal model we selected to compute the the predicted response for y as well as visualize them against the observed y-data and compute the RMSE.
+```{r}
+pred_ridge <- predict(ridge_cv, newx=as.matrix(df[train,-1]),s="lambda.1se")
+
+plot(df[train,"y"], pred_ridge)
+abline(0, 1, col = "red", lwd = 2)
+
+n_train <- length(y_train)
+
+RMSE_train_ridge <- sqrt((1/n_train)*sum((y_train - pred_ridge)^2))
+print(RMSE_train_ridge)
+```
+As we can see the data points seem closely and randomly distributed around the xy-line which indicates a well-suited model to the data. The RMSE is $0.2390407$ and therefore small enough we can call it good as well as similar to the one from Exercise 2 where we used regsubset() and slightly better than in Exercise 3 where we used pls() and pcr().
+
+# Task 2
+
+## a)
+
+We do the same as in task 1 but using $\alpha=1$ as parameter. this has th effect that the penalty term in the Elastic Net regression in glmnet() now only adds a L1 penalty. This means we now got a Lasso-regression that shrinks some coefficients to zero and therefore creates a variable selection. the lambda again takes some decreasing values as default sequence.
+```{r}
+lasso_model <- glmnet(as.matrix(df[train,-1]),df[train,"y"],alpha=1)
+
+head(lasso_model$lambda)
+plot(lasso_model, xvar="lambda")
+```
+As we can see now for increasing lambda the coefficients are not driven close to zero but actually become zero one after another. It behaves similar to Ridge-regression in terms how it works, with the difference in the penalty term that also allows for variable selection and does not keep all original predicotrs in the model. On the top we can again see the number of predictors still in the model. 
+
+## b)
+
+We now set up again cv.glmnet with our Lasso-model.
+```{r}
+lasso_cv <- cv.glmnet(as.matrix(df[train,-1]),df[train,"y"],alpha=1)
+plot(lasso_cv)
+```
+The plot description is the same as before with the MSE, the two vertical lines and on top the number of predictors in the model (that actually decrease now). As we can see using the 1se rule again the optimal model would result in (around?) 17 predictors.
+```{r}
+coef_lasso <- coef(lasso_cv,s="lambda.1se")
+head(coef_lasso)
+```
+
+## c)
+
+We again plot the predicted response vs the true and compute the RMSE.
+```{r}
+pred_lasso <- predict(lasso_cv, newx=as.matrix(df[train,-1]),s="lambda.1se")
+
+plot(df[train,"y"], pred_lasso)
+abline(0, 1, col = "red", lwd = 2)
+
+n_train <- length(y_train)
+
+RMSE_train_lasso <- sqrt((1/n_train)*sum((y_train - pred_lasso)^2))
+print(RMSE_train_lasso)
+```
+The plot of the true vs predicted response again looks well randomly and small dsitributed around the xy-line only with some slight derivations for the higher and lower values and one more sever outlier as the lowest value. This also results in the RMSE being slightly worse than for the RIdge regression, but better than in Exercise 3 with  pls() and pcr() and around the same as in Exercise 2 with regsubset().
+
+# Task 3
+
+## a)
+
+We again set up the adaptive lasso model. Default value for $\alpha$ is zero, meaning we have a lasso-model but we do specify a penalty factor with the inverse Ridge coefficients as weights. 
+```{r}
+alasso_model <- glmnet(as.matrix(df[train,-1]),df[train,"y"],penalty.factor=1/abs(coef_ridge[-1]))
+
+plot(alasso_model,xvar="lambda")
+```
+Since we a Lasso regression, again the coefficients shrink to zero, but they do take longer to do so and need higher $\lambda$ values in this adaptive lasso model than in the normal Lasso-model. Besides that the meta-data of the plot is the same before. 
+
+## b)
+
+We now use cv-glmnet() again.
+```{r}
+alasso_cv <- cv.glmnet(as.matrix(df[train,-1]),df[train,"y"], penalty.factor=1/abs(coef_ridge[-1]))
+plot(alasso_cv)
+```
+The plot again shows MSE, number of coefficients,a s well as the two vertical lines indicating lowestMSE/optimal MSE by 1se rule. The points this time follow a line that is less smooth. Also the optimal $\lambda$ value is significantly larger than in the normal lasso-model and the optimal model has less coefficeints.\
+We now again apply the 1se rule to get the optimal model-coefficients.
+```{r}
+coef_alasso <- coef(alasso_cv,s="lambda.1se")
+head(coef_alasso)
+```
+
+## c)
+
+We now again plot true vs predicted response and compute the RMSE.
+```{r}
+pred_alasso <- predict(alasso_cv, newx=as.matrix(df[train,-1]),s="lambda.1se")
+
+plot(df[train,"y"], pred_alasso)
+abline(0, 1, col = "red", lwd = 2)
+
+n_train <- length(y_train)
+
+RMSE_train_alasso <- sqrt((1/n_train)*sum((y_train - pred_alasso)^2))
+print(RMSE_train_alasso)
+```
+```{r}
+options(scipen = 999)
+df <- cbind(round(coef_alasso, 8), round(coef_lasso, 8))
+colnames(df) <- c("adaptive Lasso coef", "Lasso coef")
+df <- df[!(is.na(df[, "adaptive Lasso coef"]) & is.na(df[, "Lasso coef"]) |
+           df[, "adaptive Lasso coef"] == 0 & df[, "Lasso coef"] == 0), ]
+print(df)
+```
+
+The resulting plot looks like the data points are a bit better normally distributed around the xy-line, but only very slightly. The outliers for the high and small valeus are also very slightly less off, but overall it is very similar to the normal Lasso-model. The RMSE is also slightly higher, but not by much. When comparing the resulting coefficients we can observe the ones for the normal Lasso regression are way smaller on average in terms of absolute values. Overall adaptive Lasso when weighted by the Ridge weights emphasizes more the reliable predictors since due to the weights it puts less emphasis on predictors with less influence and is less likely to eliminate the influential predictors identified by Ridge. When looking at our results though, we cannot observe that big of a difference. Adaptive Lasso performs slightly worse in terms of RMSE but not by much so we cannot really say in this case which one is the better model or more plausible than the other.
+
