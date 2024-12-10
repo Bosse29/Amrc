@@ -1,4 +1,4 @@
- ---
+---
 title: "Advanced Methods for Regression and Classification"
 subtitle: "Exercise 8"
 author: "Bosse Behrens , st.id: 12347333"
@@ -108,7 +108,8 @@ colnames(test_spline_df) <- colnames(train_spline_df)
 test_pred <- predict(model_spline, newdata = test_spline_df)
 
 plot(train_x, train_y, main="Training and Test Sets with Predictions",
-     xlab="Temperature", ylab="Ozone", pch=16, col="blue", xlim=range(c(train_x, test_x)), ylim=range(c(train_y, test_y)))
+     xlab="Temperature", ylab="Ozone", pch=16, col="blue", 
+     xlim=range(c(train_x, test_x)), ylim=range(c(train_y, test_y)))
 
 lines(sorted_x, pred_train, col="red", lwd=2)
 
@@ -116,8 +117,10 @@ points(sort_test_x, sort_test_y, col="green", pch=16)
 
 lines(sort_test_x, test_pred, col="orange", lwd=2)
 
-legend("topleft", legend=c("Training Data", "Training Predictions", "Test Data", "Test Predictions"),
-       col=c("blue", "red", "green", "orange"), pch=c(16,NA,16,NA),lwd=c(NA,2,NA,2))
+legend("topleft", legend=c("Training Data", "Training Predictions", 
+                           "Test Data", "Test Predictions"),
+       col=c("blue", "red", "green", "orange"), pch=c(16,NA,16,NA),
+       lwd=c(NA,2,NA,2))
 ```
 As we can observe, for both train and test data the prediciotns follow a smooth curve that seems like a good fit to its data.
 
@@ -137,7 +140,8 @@ new_predictions <- predict(model_spline, newdata = new_spline_df)
 The plot.
 ```{r}
 plot(train_x, train_y, main="Training and Test Sets with Predictions",
-     xlab="Temperature", ylab="Ozone", pch=16, col="blue", xlim=c(0, 120), ylim = range(c(sorted_y, sort_test_y, new_predictions)))
+     xlab="Temperature", ylab="Ozone", pch=16, col="blue", xlim=c(0, 120), 
+     ylim = range(c(sorted_y, sort_test_y, new_predictions)))
 
 lines(sorted_x, pred_train, col="red", lwd=2)
 
@@ -195,7 +199,8 @@ new_predictions <- predict(model_spline, newdata = new_spline_df)
 Now we again plot all the previous train/test data and its prediciotns and now add the prdiciotns for the new data sequence as a line to the plot.
 ```{r}
 plot(train_x, train_y, main="Training and Test Sets with Predictions",
-     xlab="Temperature", ylab="Ozone", pch=16, col="blue", xlim=c(0, 120), ylim = range(c(sorted_y, sort_test_y, new_predictions)))
+     xlab="Temperature", ylab="Ozone", pch=16, col="blue", xlim=c(0, 120), 
+     ylim = range(c(sorted_y, sort_test_y, new_predictions)))
 
 lines(sorted_x, pred_train, col="red", lwd=2)
 
@@ -210,7 +215,8 @@ legend("topleft", legend = c("Training Data", "Training Predictions",
                               "Test Data", "Test Predictions", 
                               "Extended Predictions"),
        col = c("blue", "red", "green", "orange", "purple"),
-       pch = c(16, NA, 16, NA, NA), lty = c(NA, 1, NA, 2, 3), lwd = c(NA, 2, NA, 2, 2))
+       pch = c(16, NA, 16, NA, NA), lty = c(NA, 1, NA, 2, 3), 
+       lwd = c(NA, 2, NA, 2, 2))
 ```
 As expected, the prediciotns for the new data sequence follow the same as the train data predictions, which makes sense since it is using the same knots. Only for low and large values that we only have now by the extended range with the new data sequence, the predictions behave strangely. This is also not unusual since the model has not been trained on the new data in this range.
 
@@ -227,7 +233,8 @@ new_predictions <- predict(model_spline, newdata = new_spline_df)
 Now as before we again plot train/test data and add the predicitons for train/test/new data response as lines. To do so we need to exponentiate the rpedicitons since we used the log-transformed resposne inside the model.
 ```{r}
 plot(train_x, train_y, main="Training and Test Sets with Predictions",
-     xlab="Temperature", ylab="Ozone", pch=16, col="blue", xlim=c(0, 120), ylim = range(c(sorted_y, sort_test_y, new_predictions)))
+     xlab="Temperature", ylab="Ozone", pch=16, col="blue", xlim=c(0, 120), 
+     ylim = range(c(sorted_y, sort_test_y, new_predictions)))
 
 lines(sorted_x, exp(pred_train), col="red", lwd=3)
 
@@ -242,6 +249,7 @@ legend("topleft", legend = c("Training Data", "Training Predictions",
                               "Test Data", "Test Predictions", 
                               "Extended Predictions"),
        col = c("blue", "red", "green", "orange", "purple"),
-       pch = c(16, NA, 16, NA, NA), lty = c(NA, 1, NA, 2, 3), lwd = c(NA, 2, NA, 2, 2))
+       pch = c(16, NA, 16, NA, NA), lty = c(NA, 1, NA, 2, 3), 
+       lwd = c(NA, 2, NA, 2, 2))
 ```
 As we can observe now the predictions for small values of ozone make more sense, but the ones for higher values in the test data got worse. Also the predictions for the new data for values in the range that is not included in the train data anymore the values again decrease which probably doe snot make sense. This still might not be a problem since these high values of temperature are not ver realistic anyway.
