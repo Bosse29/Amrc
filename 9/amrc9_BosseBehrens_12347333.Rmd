@@ -1,0 +1,221 @@
+---
+title: "Advanced Methods for Regression and Classification"
+subtitle: "Exercise 8"
+author: "Bosse Behrens , st.id: 12347333"
+output: pdf_document
+---
+Firts we load the packages and data.
+```{r}
+library(ROCit)
+library(dplyr)
+data(Diabetes)
+set.seed(12347333)
+```
+We delete the columns id (it has no meaning towards diabetes), the location since the model would not work on data that is from different locaiton and also ethical reasons, the measurements for the second blood pressure since most of the data was missing in those columns and glyhb since the response it directly made up from it.
+```{r}
+Diabetes <- Diabetes %>% select(-id, -location, -bp.2s, -bp.2d, -glyhb)
+Diabetes <- na.omit(Diabetes)
+Diabetes$dtest <- ifelse(Diabetes$dtest == "+", 1, 0)
+```
+We seperate the classes.
+```{r}
+Diabetes_plus <- Diabetes[Diabetes$dtest == "1", ]
+Diabetes_minus <- Diabetes[Diabetes$dtest == "0", ]
+```
+Now we split into train and test data according to the specified rules.
+```{r}
+n_plus <- nrow(Diabetes_plus)
+n_minus <- nrow(Diabetes_minus)
+
+train_plus <- sample(1:n_plus, round((3/4) * n_plus))
+test_plus <-(1:n_plus)[-train_plus]
+train_minus <- sample(1:n_minus, round((3/4) * n_minus))
+test_minus <-(1:n_minus)[-train_minus]
+
+train_data_plus <- Diabetes_plus[train_plus, ]
+test_data_plus <- Diabetes_plus[test_plus, ]
+
+train_data_minus <- Diabetes_minus[train_minus, ]
+test_data_minus <- Diabetes_minus[test_minus, ]
+
+train_data <- rbind(train_data_plus, train_data_minus)
+
+test_data <- rbind(test_data_plus, test_data_minus)
+```
+
+
+## Task 1
+
+First we fit a logistic regression model.
+```{r}
+log_model <- glm(dtest ~ ., data = train_data, family = binomial)
+```
+The problem we face it that is does not converge and might not be very stable.
+```{r}
+test_probs <- predict(log_model, newdata = test_data, type = "response")
+
+test_pred <- ifelse(test_probs > 0.5, 1, 0)
+
+conf_matrix <- table(Predicted = test_pred, Actual = test_data$dtest)
+
+print(conf_matrix)
+
+misclass_rate <- 1 - sum(diag(conf_matrix)) / sum(conf_matrix)
+cat("Misclassification Rate:", misclass_rate, "\n")
+```
+As we observe the miscalssification rate is low, but also the classes are very unbalanced and with positive cases it is more inaccurate.
+
+## Task 2
+
+We now perform the same with the cv.glmnet logistic regression.
+```{r}
+library(glmnet)
+
+x_train <- model.matrix(~ . - dtest - 1, data = train_data)
+x_test <- model.matrix(~ . - dtest - 1, data = test_data)
+
+y_train <- as.numeric(as.character(train_data$dtest)) 
+y_test <- as.numeric(as.character(test_data$dtest))
+
+cv_model <- cv.glmnet(x_train, y_train, family = "binomial", type.measure = "class")
+```
+We predict again in the test data and get the results.
+```{r}
+test_probs <- predict(cv_model, newx = x_test, s = "lambda.min", type = "response")
+
+test_pred <- ifelse(test_probs > 0.5, 1, 0)
+
+conf_matrix <- table(Predicted = test_pred, Actual = y_test)
+
+print(conf_matrix)
+
+misclass_rate <- 1 - sum(diag(conf_matrix)) / sum(conf_matrix)
+cat("Misclassification Rate:", misclass_rate, "\n")
+```
+As we can see this already works a bit better.
+
+## Task 3
+
+### part a and b anc c
+
+After first tests with fitting the model we saw it had problems and was also taking long to compute, so we set k=5 for the smoothed parameters. We choose to smooth all numeric, non-factorial variables, because we simply do not have the expert knowledge on which relationships might be linear and which ones not.
+```{r}
+library(mgcv)
+gam_model <- gam(dtest ~ 
+                   s(chol,  k = 5) + 
+                   s(stab.glu,  k = 5) + 
+                   s(hdl,  k = 5) + 
+                   s(ratio,  k = 5) + 
+                   s(age,  k = 5) + 
+                   s(bmi,  k = 5) + 
+                   s(whr,  k = 5) + 
+                   s(height,  k = 5) + 
+                   s(weight,  k = 5) + 
+                   s(bp.1s,  k = 5) + 
+                   s(bp.1d,  k = 5) + 
+                   s(time.ppn,  k = 5) + 
+                   gender + 
+                   frame,
+                 data = train_data, 
+                 family = binomial)
+summary(gam_model)
+```
+As we can observe, stab.glu is significant at the 0.001 level, the intercept and time.ppn at the 0.01 level and gender, chol, age and bp.1d at the 0.1 level. The smooth functions are linear (edf=1) for age, bmi, whr, height and weight, meaning there is probabyly no overly complex relationship with the response. for bp.1s it is at 1.4, stab.glu and bp.1d at around 2 and ratio, chol and time.ppn at or slightly over 3.5. The higher this nuber is, the more complex the non-linear relationship.
+
+### part d
+
+We plot the explanatory variables we smoothed against their smoothed values.
+```{r}
+dev.new()
+plot(gam_model, page = 3, shade = TRUE, shade.col = "yellow", scale=0)
+```
+We can observe that for the less compelx predictors, like weight and height these liens are straight which implies as mentioned some lienar relationship. As the dimensions increase (edf) the predictors with greather values such as time.ppn show more coplex patterns that show in more wavy and not as ismple lines. These imply non-linear relationships. The yellow part are the confidence intervals, which are mostly low at the center, where most of the data is for most distributions of the opredictors, whereas at the edges they get wider since there is less data and the confidence intervals cannot be as reliable anymore.
+
+### part e
+
+We again obtain the predictions on the test data and clauclate confusion matrix anb misclassification rate.
+```{r}
+test_probs <- predict(gam_model, newdata = test_data, type = "response")
+
+test_pred <- ifelse(test_probs > 0.5, 1, 0)
+
+conf_matrix <- table(Predicted = test_pred, Actual = test_data$dtest)
+print(conf_matrix)
+
+
+misclass_rate <- 1 - sum(diag(conf_matrix)) / sum(conf_matrix)
+cat("Misclassification Rate:", misclass_rate, "\n")
+```
+As we can see compared to the simple logistic mdoels in Task 2 and 3 the results got significantly worse.
+
+### part f
+
+We use a shrinkage smoother with thin plate regression spline smoothers that shrinks some coefficients towards zero.
+```{r}
+gam_model <- gam(dtest ~ 
+                   s(chol, bs = "ts", k = 5) + 
+                   s(stab.glu, bs = "ts", k = 5) + 
+                   s(hdl, bs = "ts", k = 5) + 
+                   s(ratio, bs = "ts", k = 5) + 
+                   s(age, bs = "ts", k = 5) + 
+                   s(bmi, bs = "ts", k = 5) + 
+                   s(whr, bs = "ts", k = 5) + 
+                   s(height, bs = "ts", k = 5) + 
+                   s(weight, bs = "ts", k = 5) + 
+                   s(bp.1s, bs = "ts", k = 5) + 
+                   s(bp.1d, bs = "ts", k = 5) + 
+                   s(time.ppn, bs = "ts", k = 5) + 
+                   gender + 
+                   frame,
+                 data = train_data, 
+                 family = binomial)
+
+
+summary(gam_model)
+```
+As we can see ratio, age, whr, height, weight and bp.1s are very small and close to zero. Again stab.glu is by far the most significant predictor.
+These predictors are still used but effectivvely not since they are so small. We now again predict on the test ste and plot confusion matrix and misclassification rate.
+```{r}
+test_probs <- predict(gam_model, newdata = test_data, type = "response")
+
+test_pred <- ifelse(test_probs > 0.5, 1, 0)
+
+conf_matrix <- table(Predicted = test_pred, Actual = test_data$dtest)
+print(conf_matrix)
+
+misclass_rate <- 1 - sum(diag(conf_matrix)) / sum(conf_matrix)
+cat("Misclassification Rate:", misclass_rate, "\n")
+```
+We can observe a very slight improve compared to the normal gam we used before.
+
+### part g
+
+We now train a GAM model again by now completely excluding all predictors that were shrunk very close to zero in part f.
+```{r}
+gam_model <- gam(dtest ~ 
+                   s(chol, k = 5) + 
+                   s(stab.glu, k = 5) + 
+                   s(hdl, k = 5) + 
+                   s(bp.1d, k = 5) + 
+                   s(time.ppn, k = 5) + 
+                   gender + 
+                   frame,
+                 data = train_data, 
+                 family = binomial)
+
+summary(gam_model)
+```
+We see that stab.glu is still by far the most significant predictor. The intercept is also very significant. gender, chol, hdl and time.ppn are significant at a higher level. Only frame and bp.1d are not showing as significant at all. Of the smoothed predicotrs only hdl shows a linear relationship while the other are more complex with higher edf values. The R squared (adjusted) is at 0.753 and therefore alright but not exceedingly satisfying.
+We again predict on tghe test data and get the confusion matrix and miscalssiication rate.
+```{r}
+test_probs <- predict(gam_model, newdata = test_data, type = "response")
+
+test_pred <- ifelse(test_probs > 0.5, 1, 0)
+
+conf_matrix <- table(Predicted = test_pred, Actual = test_data$dtest)
+print(conf_matrix)
+
+misclass_rate <- 1 - sum(diag(conf_matrix)) / sum(conf_matrix)
+cat("Misclassification Rate:", misclass_rate, "\n")
+```
+As we can see this is performing the same as the one before. It is still performing worse than the Logistic models from task 1 and 2 though. Some more indepth analysis of which perdictors to smooth, which to select, etc. would be required to possibly improve a GAM mode  further.
