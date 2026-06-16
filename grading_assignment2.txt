@@ -1,0 +1,210 @@
+DLVC 2026S - Assignment 2 (Semantic Segmentation) - Grading
+============================================================
+Grader notes:
+- Base score is 30 points. Bonus points (Efficient Self-Attention explanation,
+  additional learning-rate fine-tuning experiment, other additional experimentation)
+  are added on top but cannot be entered above 30. For submissions that exceed 30,
+  the gross total is shown together with a note (as done by the other tutors).
+- Deduction conventions follow the shared feedback sheet:
+    * metrics.py missing ValueError/input checks: -1 (none) / -0.5 (only partial, e.g. shape only)
+    * metrics.py not excluding label 255 (required): -1 (wrong mIoU on Cityscapes)
+    * mit_transformer.py OverlapPatchEmbed H/W: float "/" -1, wrong formula -1.5
+    * segformer_head.py fuse: expected `_c = self.linear_fuse(torch.cat([_c4,_c3,_c2,_c1], dim=1))`;
+      reversed concat order [_c1,_c2,_c3,_c4]: -0.5
+    * each missing required report deliverable (FCN scratch-vs-pretrained, SegFormer
+      scratch + both fine-tuning options a/b, Oxford predicted-mask visualization): -1
+- Reference answers used for the three code TODOs:
+    Block.forward:  x1=norm1(x); x1=attn(x1,H,W); x1=x+drop_path(x1);
+                    x2=norm2(x1); x2=mlp(x2,H,W); x2=x1+drop_path(x2)
+    OverlapPatchEmbed: H=W=(img_size+2*(patch_size//2)-patch_size)//stride+1  (== img_size//stride);
+                       num_patches=H*W
+    SegFormerHead:  _c = self.linear_fuse(torch.cat([_c4,_c3,_c2,_c1], dim=1))
+
+
+====================================================================
+Group 18 (31 points)
+- +1 pt: additional LR fine-tuning experiment (strategy a, lr 1e-3 vs 5e-4, discussed)
+All three code TODOs correct, metrics.py with full input/shape/value checks and 255
+handling. Report complete: FCN scratch-vs-pretrained, SegFormer scratch + fine-tune
+options a & b, predicted Oxford masks, all four theory questions answered well.
+I can not enter more than 30 points; if you need the extra point at the end of the
+course, please write me an email.
+
+====================================================================
+Group 19 (33 points)
+- +2 pts: BONUS (Efficient Self-Attention) - correct explanation and the 5 relevant
+  lines (mit_transformer.py:104-108) are pointed out
+- +1 pt: additional LR fine-tuning experiment (fine-tune A, lr 5e-4)
+All code TODOs correct, metrics.py complete (confusion matrix, 255 ignored, checks).
+Report very complete with summary table, all required curves and qualitative masks.
+I can not enter more than 30 points; if you need the extra points at the end of the
+course, please write me an email.
+
+====================================================================
+Group 20 (30.5 points)
+segformer_head.py:
+  - -0.5 pts: concat order reversed (`torch.cat([_c1,_c2,_c3,_c4])`); should be
+    `_c = self.linear_fuse(torch.cat([_c4,_c3,_c2,_c1], dim=1))`
+- +1 pt: additional LR fine-tuning experiment (lr 0.0005, labelled "bonus")
+Block.forward and OverlapPatchEmbed correct, metrics.py complete. Report complete:
+FCN comparison, SegFormer scratch/unfrozen/frozen, best-model mask visualization,
+all theory questions. Very thorough.
+I can not enter more than 30 points; if you need the extra point at the end of the
+course, please write me an email.
+
+====================================================================
+Group 21 (32 points)
+metrics.py:
+  - -1 pt: pixels with label 255 are NOT excluded in update() (no valid-mask before the
+    per-class IoU loop). 255-pixels predicted as a class get counted as false positives,
+    so the Cityscapes mIoU is biased. The instructions require excluding 255.
+- +2 pts: BONUS (Efficient Self-Attention) - explained and the 5 lines are shown
+- +1 pt: additional LR fine-tuning experiment (lr 1e-3 / 5e-4 / 1e-4 sensitivity)
+Other code TODOs correct (shape/class/value ValueErrors are present). Report complete
+incl. qualitative Oxford masks.
+I can not enter more than 30 points; if you need the extra points at the end of the
+course, please write me an email.
+
+====================================================================
+Group 22 (30 points)
+metrics.py:
+  - -1 pt: no ValueError / input checks at all (docstring requires raising ValueError on
+    unsupported shapes/values). The mIoU computation itself is correct and ignores 255.
+- +1 pt: additional LR fine-tuning experiment (four learning rates 1e-4..5e-3)
+All other code TODOs correct (H/W = img_size//patch_size accepted). Report complete:
+FCN comparison, SegFormer scratch/pretrain/frozen, best-model masks, all theory questions.
+
+====================================================================
+Group 23 (33 points)
+- +2 pts: BONUS (Efficient Self-Attention) - dedicated section, explanation + 5 lines
+- +1 pt: additional LR fine-tuning experiment (halved LR for option a)
+All code TODOs correct, metrics.py complete (255 ignored, value checks). Report complete
+with separate train/val curves, best-model mask visualization and all theory questions.
+(Minor: a generic AI-assistance note and an unrelated citation - no deduction.)
+I can not enter more than 30 points; if you need the extra points at the end of the
+course, please write me an email.
+
+====================================================================
+Group 24 (30.5 points)
+segformer_head.py:
+  - -0.5 pts: concat order reversed (`torch.cat([_c1,_c2,_c3,_c4])`); should be
+    `_c = self.linear_fuse(torch.cat([_c4,_c3,_c2,_c1], dim=1))`
+- +1 pt: additional LR fine-tuning experiment (lr 0.0005 for options a and b)
+Block.forward and OverlapPatchEmbed correct, metrics.py complete with checks and 255
+handling. Strong report incl. architecture comparison table and best-model masks.
+I can not enter more than 30 points; if you need the extra point at the end of the
+course, please write me an email.
+
+====================================================================
+Group 25 (32.5 points)
+metrics.py:
+  - -0.5 pts: only a shape (dim) ValueError is raised; missing the explicit
+    type/value/class checks required by the docstrings (255 is handled via masking, OK).
+- +2 pts: BONUS (Efficient Self-Attention) - dedicated section, explanation + 5 lines
+- +1 pt: additional LR fine-tuning experiment (strategy A, half LR 0.0005)
+Other code TODOs correct. Report complete and well structured: FCN comparison, SegFormer
+scratch + A/B, best-model masks, all theory questions.
+I can not enter more than 30 points; if you need the extra points at the end of the
+course, please write me an email.
+
+====================================================================
+Group 27 (28 points)
+report:
+  - -1 pt: fine-tuning option b (frozen encoder) is not reported. Section 6.3 is titled
+    "Difference between fine-tuning options" but only compares learning rates (all
+    full-fine-tune / option a runs). The required scratch vs option-a vs option-b
+    comparison is therefore incomplete. (The freezing code does exist in the submission.)
+  - -1 pt: predicted Oxford validation masks of the best model are missing (Figures 1-3
+    are all training curves).
+Code is fine: all three TODOs correct, metrics.py complete with 255 handling. FCN
+comparison and SegFormer scratch-vs-pretrained are present, and a learning-rate
+comparison was done - but it cannot substitute for the missing option-b experiment.
+
+====================================================================
+Group 28 (29.5 points)
+mit_transformer.py:
+  - -0.5 pts: OverlapPatchEmbed no longer computes self.H/self.W/num_patches - the file
+    was rewritten and the required Part-5.2 lines were dropped (forward still works).
+segformer_head.py:
+  - -0.5 pts: concat order reversed (`torch.cat([_c1,_c2,_c3,_c4])`).
+metrics.py:
+  - -0.5 pts: only shape (dim) checks; missing type/value/class ValueErrors.
+- +1 pt: additional LR fine-tuning experiment (lr 5e-5)
+Notes: the whole model file was rewritten in a simplified form and the Efficient
+Self-Attention (sr_ratio block) was REMOVED from the code, so the bonus section in the
+report points to code that is not in the submitted codebase -> the Efficient
+Self-Attention bonus is NOT awarded. Block.forward is functionally correct. Experiments
+are heavily under-trained (Cityscapes pre-training only 2 epochs; SegFormer ~0.45 mIoU),
+which is acceptable for grading but worth noting.
+
+====================================================================
+Group 29 (31 points)
+- +1 pt: additional LR fine-tuning experiment (lr 0.001 vs 0.0005)
+All code TODOs correct, metrics.py complete (255 + unsupported-value checks). Report
+complete: FCN scratch-vs-pretrained curves, SegFormer scratch + option a/b, learning-rate
+run, qualitative Oxford masks (8 samples), all four theory questions. (Files were
+reorganised, e.g. train_fcn.py / metrics_seg.py, but the required files are present.)
+I can not enter more than 30 points; if you need the extra point at the end of the
+course, please write me an email.
+
+====================================================================
+Group 30 (32 points)
+report:
+  - -1 pt: predicted Oxford validation masks of the best model are missing (only training/
+    validation curves and tables are shown).
+- +2 pts: BONUS (Efficient Self-Attention) - explanation + 5 lines pointed out
+- +1 pt: additional LR fine-tuning experiment (lr 0.001 vs 0.0005)
+All code TODOs correct, metrics.py complete with 255 handling and value checks. Theory
+questions and all required experiment curves/tables are present.
+I can not enter more than 30 points; if you need the extra points at the end of the
+course, please write me an email.
+
+====================================================================
+Group 31 (30 points)
+All three code TODOs correct, metrics.py complete (confusion matrix, 255 ignored, shape/
+class checks). Report complete: FCN scratch-vs-pretrained (incl. the pretrained=False ->
+weights=None fix), SegFormer frozen vs unfrozen + scratch, predicted Oxford masks vs
+originals, all four theory questions. No bonus experiments (same LR for all runs).
+Good submission!
+
+====================================================================
+Group 32 (31 points)
+report:
+  - -1 pt: predicted Oxford validation masks of the best model are missing (FCN and
+    SegFormer comparison curves + tables are present, but no qualitative pet masks).
+- +1 pt: additional LR fine-tuning experiment (frozen encoder, lr 1e-3 vs 5e-4)
+- +1 pt: additional experimentation (mask-consistent geometric augmentation + color
+  jitter, with reported effect on mIoU)
+All code TODOs correct, metrics.py complete (255 handled, CITY_CLASSES=19). FCN and
+SegFormer comparison plots (separate train/val) and answers to all questions are present.
+I can not enter more than 30 points; if you need the extra point at the end of the
+course, please write me an email.
+
+====================================================================
+Group 33 (31.5 points)
+segformer_head.py:
+  - -0.5 pts: concat order reversed (`torch.cat([_c1,_c2,_c3,_c4])`); should be
+    `_c = self.linear_fuse(torch.cat([_c4,_c3,_c2,_c1], dim=1))`
+- +2 pts: BONUS (Efficient Self-Attention) - explanation + the 5 lines
+Block.forward and OverlapPatchEmbed correct, metrics.py complete (255 handled). Report
+complete and detailed: architecture comparison, scratch + option a/b, predicted Oxford
+masks (input/GT/prediction), all four theory questions. No separate LR experiment.
+I can not enter more than 30 points; if you need the extra points at the end of the
+course, please write me an email.
+
+
+====================================================================
+Already graded by colleagues (in this folder for calibration) - my independent check:
+====================================================================
+Group 4 (29.5 points - colleague grade confirmed)
+  segformer_head.py -0.5 pts: reversed concat order [_c1,_c2,_c3,_c4]. Everything else
+  (Block.forward, OverlapPatchEmbed via math.floor formula, metrics.py with shape/class/
+  spatial checks + 255 handling) is correct. Report complete incl. best-model masks and
+  an LR comparison. My check matches the colleague's 29.5.
+
+Group 5 (34 points - colleague grade; capped at 30)
+  Colleague awarded +2 additional experimentation and +2 Efficient Self-Attention.
+  CAUTION for the records: in mit_transformer.py Block.forward, line 165 applies
+  self.attn(x2,H,W) a SECOND time instead of self.mlp(x2,H,W) - the MLP sub-layer is
+  never used. The model still runs (matching shapes) but this is a real bug that was not
+  deducted. metrics.py and the other TODOs are correct. Grade left as assigned (34).
